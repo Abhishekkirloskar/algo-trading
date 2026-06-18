@@ -46,6 +46,9 @@ buy/sell markers, plus the equity curve vs. buy & hold).
 | `compare.py` | Runs **all** strategies side by side in one table |
 | `oos.py` | **Out-of-sample** train/test validation (catches overfitting) |
 | `paper_trade.py` | Live paper trading on Alpaca (with a no-keys dry-run) |
+| `monitor.py` | Performance tracking: equity, drawdown, rolling Sharpe, trade log, health checks |
+| `agent.py` | Suggest-only monitoring agent (flags trouble, proposes OOS-validated changes) |
+| `dashboard.py` | Live Streamlit dashboard tying it all together |
 
 ## The four strategies
 
@@ -97,6 +100,38 @@ backtest by ~50%**, and never trust a result you haven't tested out-of-sample.
 > This is also why this repo does **not** ship "optimized" parameters: the
 > best-on-history settings are usually overfit. Pick sensible round numbers,
 > validate out-of-sample, and stay skeptical.
+
+## Monitoring dashboard + the agent
+
+A live dashboard to watch a strategy, plus a self-monitoring agent.
+
+```bash
+streamlit run dashboard.py        # opens in your browser
+```
+
+The dashboard shows headline metrics, the equity curve vs. buy & hold, drawdown
+and rolling-Sharpe charts, the current position, a trade log, and the agent's
+verdict — all interactive via the sidebar (ticker, strategy, parameters).
+
+### The agent is **suggest-only** (on purpose)
+
+You asked for something that "tweaks the algorithm if it's not performing well."
+The honest version of that is *not* auto-re-tuning — that just chases noise and
+overfits (we proved backtests halve out-of-sample). So the agent:
+
+- **Checks health** with simple, transparent rules (deep drawdown, lagging the
+  benchmark over ~6 months, negative 3-month rolling Sharpe).
+- If struggling, **searches for a better config but only suggests it if it beats
+  the current one OUT-OF-SAMPLE** (on data the search never saw). Otherwise it
+  explicitly says "hold — this is variance, not a broken strategy."
+- **Never edits settings or trades.** A human reviews and decides.
+
+```bash
+python agent.py --ticker AAPL --strategy sma_crossover --fast 20 --slow 50
+```
+
+This keeps the *spirit* of a self-improving system (watches itself, adapts) with
+discipline instead of a self-destruct button.
 
 ## Concepts baked into the code (worth knowing)
 
