@@ -24,14 +24,20 @@ from oos import evaluate, FAST_GRID, SLOW_GRID
 
 def diagnose(ticker: str, strategy: str, fast: int, slow: int,
              start: str, end: str, split: float = 0.7,
-             min_improvement: float = 0.20) -> dict:
+             min_improvement: float = 0.20,
+             dd_limit: float = -0.20, underperf_margin: float = 0.05,
+             sharpe_floor: float = 0.0) -> dict:
     """
     Returns a structured recommendation. `min_improvement` is how much better
     (fractionally, on out-of-sample Sharpe) a candidate must be before we'd
     bother suggesting a change — a buffer so we don't react to tiny noise.
+
+    `dd_limit`, `underperf_margin`, and `sharpe_floor` are the (configurable)
+    health-check thresholds.
     """
     df = build_report(ticker, strategy, start, end, fast=fast, slow=slow)
-    flags = health_check(df)
+    flags = health_check(df, dd_limit=dd_limit, underperf_margin=underperf_margin,
+                         sharpe_floor=sharpe_floor)
     status = current_status(df)
 
     result = {
@@ -115,9 +121,14 @@ def main():
     p.add_argument("--slow", type=int, default=50)
     p.add_argument("--start", default="2015-01-01")
     p.add_argument("--end", default="2024-12-31")
+    p.add_argument("--dd-limit", type=float, default=-0.20, help="drawdown alert threshold, e.g. -0.20")
+    p.add_argument("--underperf", type=float, default=0.05, help="vs-benchmark lag margin, e.g. 0.05")
+    p.add_argument("--sharpe-floor", type=float, default=0.0, help="rolling-Sharpe floor")
     args = p.parse_args()
 
-    rec = diagnose(args.ticker, args.strategy, args.fast, args.slow, args.start, args.end)
+    rec = diagnose(args.ticker, args.strategy, args.fast, args.slow, args.start, args.end,
+                   dd_limit=args.dd_limit, underperf_margin=args.underperf,
+                   sharpe_floor=args.sharpe_floor)
     print("\n" + "=" * 60)
     for line in rec["narrative"]:
         print(line)

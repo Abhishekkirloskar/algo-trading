@@ -80,12 +80,14 @@ def current_status(df: pd.DataFrame) -> dict:
 
 def health_check(df: pd.DataFrame,
                  dd_limit: float = -0.20,
-                 underperf_margin: float = 0.05) -> list:
+                 underperf_margin: float = 0.05,
+                 sharpe_floor: float = 0.0) -> list:
     """
     Look for signs the strategy is struggling *right now*. Returns a list of
     (severity, message) flags. Empty list = looks healthy.
 
-    These are deliberately simple, transparent rules — not a black box.
+    These are deliberately simple, transparent rules — not a black box. All
+    three thresholds are caller-configurable (dashboard sliders / CLI flags).
     """
     flags = []
 
@@ -103,10 +105,23 @@ def health_check(df: pd.DataFrame,
                           f"Lagging buy & hold over ~6 months ({s:+.1%} vs {b:+.1%})."))
 
     rs = df["roll_sharpe"].iloc[-1]
-    if pd.notna(rs) and rs < 0:
-        flags.append(("medium", f"3-month rolling Sharpe is negative ({rs:.2f})."))
+    if pd.notna(rs) and rs < sharpe_floor:
+        flags.append(("medium",
+                      f"3-month rolling Sharpe ({rs:.2f}) is below the {sharpe_floor:.2f} floor."))
 
     return flags
+
+
+def monthly_returns(df: pd.DataFrame) -> pd.DataFrame:
+    """A year×month table of the strategy's monthly returns — for a heatmap."""
+    import calendar
+
+    r = df["strategy_return"]
+    grouped = (1 + r).groupby([df.index.year, df.index.month]).prod() - 1
+    table = grouped.unstack()
+    table.columns = [calendar.month_abbr[m] for m in table.columns]
+    table.index.name = "Year"
+    return table
 
 
 def summary_metrics(df: pd.DataFrame) -> dict:

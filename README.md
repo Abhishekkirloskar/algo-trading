@@ -46,8 +46,9 @@ buy/sell markers, plus the equity curve vs. buy & hold).
 | `compare.py` | Runs **all** strategies side by side in one table |
 | `oos.py` | **Out-of-sample** train/test validation (catches overfitting) |
 | `paper_trade.py` | Live paper trading on Alpaca (with a no-keys dry-run) |
-| `monitor.py` | Performance tracking: equity, drawdown, rolling Sharpe, trade log, health checks |
+| `monitor.py` | Performance tracking: equity, drawdown, rolling Sharpe, trade log, monthly returns, configurable health checks |
 | `agent.py` | Suggest-only monitoring agent (flags trouble, proposes OOS-validated changes) |
+| `analyst.py` | Optional AI analyst — Claude writes a plain-English readout (needs an API key) |
 | `dashboard.py` | Live Streamlit dashboard tying it all together |
 
 ## The four strategies
@@ -110,8 +111,21 @@ streamlit run dashboard.py        # opens in your browser
 ```
 
 The dashboard shows headline metrics, the equity curve vs. buy & hold, drawdown
-and rolling-Sharpe charts, the current position, a trade log, and the agent's
-verdict — all interactive via the sidebar (ticker, strategy, parameters).
+and rolling-Sharpe charts, a price chart with buy/sell markers, a **monthly-returns
+heatmap**, a **trade-return distribution**, the current position, a trade log, and
+the agent's verdict — all interactive via the sidebar (ticker, strategy,
+parameters). The sidebar also has **configurable health-alert thresholds**
+(max drawdown, lag-vs-benchmark, rolling-Sharpe floor) so you decide what counts
+as "struggling".
+
+### AI analyst note (optional)
+
+If you set an `ANTHROPIC_API_KEY` (in `.env`), the dashboard adds a **"Generate
+analyst note"** button that asks Claude to write a short, plain-English readout
+of the metrics + the agent's diagnosis (`analyst.py`, model `claude-opus-4-8`).
+It's purely explanatory — it does **not** make trading decisions or change
+settings. Without a key, everything still works; you just get the rule-based
+diagnosis. The analyst is reminded it's educational, not financial advice.
 
 ### The agent is **suggest-only** (on purpose)
 
