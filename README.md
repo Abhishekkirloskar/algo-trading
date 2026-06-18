@@ -40,28 +40,72 @@ buy/sell markers, plus the equity curve vs. buy & hold).
 
 | File | Role |
 |---|---|
-| `data.py` | Downloads & caches historical prices via `yfinance` |
-| `strategies.py` | Defines strategies (currently a moving-average crossover) |
-| `backtest.py` | Simulates the strategy, computes metrics, draws the chart |
+| `data.py` | Downloads & caches historical prices via `yfinance` (US + India) |
+| `strategies.py` | The strategies (4 of them) + the live-signal helper |
+| `backtest.py` | Simulates one strategy, prints metrics, draws the chart |
+| `compare.py` | Runs **all** strategies side by side in one table |
+| `oos.py` | **Out-of-sample** train/test validation (catches overfitting) |
+| `paper_trade.py` | Live paper trading on Alpaca (with a no-keys dry-run) |
 
-The default strategy is a **SMA crossover**: be invested when the 20-day moving
-average is above the 50-day (uptrend), otherwise sit in cash.
+## The four strategies
+
+| Name | Type | Idea | Profile |
+|---|---|---|---|
+| `sma_crossover` | trend | long when fast SMA > slow SMA | few big wins, many small losses |
+| `sma_crossover_trend` | trend | crossover, but only above the 200-day | fewer whipsaws, smaller drawdown |
+| `rsi_mean_reversion` | mean-reversion | buy oversold dips in an uptrend (Connors RSI-2) | high win rate, small edge, many trades |
+| `donchian_breakout` | breakout/swing | buy N-day highs, exit on M-day lows | classic swing/trend |
+
+```bash
+python backtest.py --ticker AAPL --strategy donchian_breakout
+python compare.py  --ticker AAPL                 # all strategies at once
+```
+
+Tune the horizon with `--fast`/`--slow`: smaller = shorter holds (swing,
+days–weeks); larger = longer holds (position, months). The `Hold` column in
+`compare.py` shows the average days held so you can target a horizon.
 
 ## Reading the results
 
-- **Total return / CAGR** — how much you'd have made (CAGR = annualized).
+- **CAGR** — compound annual growth rate: the steady %/year, *with* compounding.
+  The number that reflects what actually ends up in your account.
+- **Total return** — the whole-period gain (hides the time dimension; use CAGR
+  to compare across periods).
 - **Sharpe ratio** — return per unit of risk. >1 good, >2 great.
-- **Max drawdown** — the worst peak-to-trough drop. The strategy's main job is
-  often to *reduce* this (less pain) even if it earns less.
-- **Strategy vs. Buy & Hold** — the honest benchmark. Beating it consistently
-  is genuinely hard; that's the whole lesson.
+- **Max drawdown** — worst peak-to-trough drop. Often a strategy's real value is
+  *reducing* this, even if it earns less than buy & hold.
+- **Win rate** — % of trades that were profitable. **Misleading on its own** —
+  read it with avg win/avg loss. You can win 40% of the time and still profit if
+  wins are bigger; or win 60% and lose money (see `rsi_mean_reversion` on AAPL).
+- **Strategy vs. Buy & Hold** — the honest benchmark. Beating it consistently is
+  genuinely hard; that's the whole lesson.
+
+## Validate before you trust: `oos.py`
+
+The #1 way beginners fool themselves is **overfitting** — trying many parameters
+and keeping whichever fit the past best. It won't survive live.
+
+```bash
+python oos.py --ticker AAPL --strategy sma_crossover
+```
+
+It tunes parameters on the early "train" years, locks them, then judges on the
+recent "test" years it never saw. In our runs, backtest Sharpe **roughly halved**
+out-of-sample *every time* (1.49 → 0.71, etc.). Lesson: **mentally discount any
+backtest by ~50%**, and never trust a result you haven't tested out-of-sample.
+
+> This is also why this repo does **not** ship "optimized" parameters: the
+> best-on-history settings are usually overfit. Pick sensible round numbers,
+> validate out-of-sample, and stay skeptical.
 
 ## Concepts baked into the code (worth knowing)
 
 - **Look-ahead bias** — we `shift()` signals by one day so we only act on
   information we'd actually have had. Skipping this fakes great results.
 - **Trading costs** — each trade subtracts a small fee (brokerage + slippage),
-  because frequent trading quietly eats returns.
+  because frequent trading quietly eats returns (it sank the 200-trade RSI bot).
+- **Expectancy > win rate** — `(win% × avg win) − (loss% × avg loss) − costs` is
+  what actually matters.
 
 ## Paper trading (US stocks via Alpaca)
 
@@ -106,8 +150,19 @@ target. Run it **once a day** (orders fill when the US market is open, 9:30am–
 
 ## Next steps (ideas to extend)
 
-1. Add more strategies in `strategies.py` (RSI mean-reversion, breakout, etc.)
-   and register them in `STRATEGIES`.
-2. Backtest a basket of stocks and compare.
-3. Automate `paper_trade.py` with `cron` to run daily after the close.
-4. Add position sizing & risk limits (never risk more than X% per trade).
+1. **Walk-forward analysis** — repeat the `oos.py` train/test split across many
+   rolling windows for a more robust picture than a single split.
+2. Add your own strategy in `strategies.py` and register it in `STRATEGIES`.
+3. Backtest a **basket** of stocks and average the results (one stock can flatter
+   or fool you).
+4. Automate `paper_trade.py` with `cron` to run daily after the US close.
+5. Add **position sizing & risk limits** (never risk more than ~1–2% per trade).
+6. Add a **benchmark index** (SPY / NIFTY) so "beat the market" is explicit.
+
+## ⚠️ Reality check
+
+This is an educational sandbox. Backtests are optimistic, real fills have
+slippage, and markets change. Most retail algo strategies do **not** beat buying
+and holding an index after costs. Treat this as a way to learn the *process*
+(data → strategy → honest validation → paper trading), not a money printer.
+Never risk money you can't afford to lose.

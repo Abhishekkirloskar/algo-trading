@@ -60,6 +60,48 @@ def run_backtest(df: pd.DataFrame, cost_per_trade: float = 0.0005) -> pd.DataFra
     return out
 
 
+def trade_stats(df: pd.DataFrame, cost_per_trade: float = 0.0005) -> dict:
+    """
+    Break the run into round-trip trades (a BUY followed by its SELL) and
+    measure how many were winners.
+
+    Win rate = profitable round-trips / total round-trips. Also report the
+    average win and average loss, which matter just as much: you can win only
+    40% of the time and still be profitable if your wins are bigger.
+    """
+    trade_returns = []
+    holds = []                       # how many trading days each trade lasted
+    entry_price = None
+    entry_i = None
+    closes = df["Close"].values
+    trades = df["trade"].values
+    positions = df["position"].values
+    for i in range(len(df)):
+        if trades[i] == 1 and positions[i] == 1:            # entered (bought)
+            entry_price = closes[i]
+            entry_i = i
+        elif trades[i] == 1 and positions[i] == 0 and entry_price is not None:  # exited
+            gross = closes[i] / entry_price - 1
+            trade_returns.append(gross - 2 * cost_per_trade)  # buy + sell costs
+            holds.append(i - entry_i)
+            entry_price = None
+
+    if not trade_returns:
+        return {"Round-trip trades": "0", "Win rate": "—", "Avg win": "—",
+                "Avg loss": "—", "Avg hold (days)": "—"}
+
+    tr = pd.Series(trade_returns)
+    wins = tr[tr > 0]
+    losses = tr[tr <= 0]
+    return {
+        "Round-trip trades": f"{len(tr)}",
+        "Win rate": f"{len(wins) / len(tr):.0%}",
+        "Avg win": f"{wins.mean():+.1%}" if len(wins) else "—",
+        "Avg loss": f"{losses.mean():+.1%}" if len(losses) else "—",
+        "Avg hold (days)": f"{sum(holds) / len(holds):.0f}",
+    }
+
+
 def metrics(returns: pd.Series, equity: pd.Series) -> dict:
     """Compute the headline performance numbers from a return series."""
     total_return = equity.iloc[-1] - 1
@@ -148,6 +190,13 @@ def main():
     for k in strat:
         print(f"  {k:<16}{strat[k]:>12}{bh[k]:>14}")
     print(f"  {'Trades made':<16}{n_trades:>12}{'—':>14}")
+    print("=" * 52)
+
+    # Per-trade win/loss breakdown for the strategy.
+    ts = trade_stats(df)
+    print("  Strategy trade breakdown:")
+    for k, v in ts.items():
+        print(f"  {k:<20}{v:>10}")
     print("=" * 52)
     print("  Note: past performance does NOT guarantee future results.")
 
